@@ -72,6 +72,9 @@ class Visualizer:
         self._fps_tick = cv2.getTickCount()
         self._fps_display: float = 0.0
 
+        # Seconds clock (resets every minute)
+        self._start_time = cv2.getTickCount()
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -153,6 +156,16 @@ class Visualizer:
                 (self.w - 100, 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, _WHITE, 1, cv2.LINE_AA,
             )
+
+        # --- Seconds clock (resets every minute) ------------------------------
+        elapsed = (cv2.getTickCount() - self._start_time) / cv2.getTickFrequency()
+        seconds = int(elapsed) % 60
+        cv2.putText(
+            frame,
+            f"{seconds:02d}s",
+            (self.w - 100, 40),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.45, _CYAN, 1, cv2.LINE_AA,
+        )
 
         return frame
 

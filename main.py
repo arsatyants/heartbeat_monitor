@@ -9,7 +9,7 @@ Usage
 Options
 -------
     --resolution WxH     Camera resolution (default: 640x480)
-    --fps INT            Target frame rate  (default: 60)
+    --fps INT            Target frame rate  (default: 30)
     --window FLOAT       PPG analysis window in seconds (default: 12)
     --no-flip            Disable horizontal mirror
     --camera-index INT   OpenCV camera index (fallback, default: 0)
@@ -58,7 +58,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--resolution", default="640x480",
                         help="Camera resolution, e.g. 640x480")
-    parser.add_argument("--fps", type=int, default=60,
+    parser.add_argument("--fps", type=int, default=30,
                         help="Target capture frame rate")
     parser.add_argument("--window", type=float, default=12.0,
                         help="PPG analysis window in seconds")
