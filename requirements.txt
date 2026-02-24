@@ -1,0 +1,11 @@
+# Core scientific stack
+numpy>=1.24
+scipy>=1.10
+opencv-python>=4.8
+
+# Testing
+pytest>=7.4
+
+# Raspberry Pi camera (install manually on Pi OS or via apt)
+# picamera2>=0.3.12          # uncomment on Raspberry Pi
+# libcamera                  # system package: sudo apt install python3-libcamera
