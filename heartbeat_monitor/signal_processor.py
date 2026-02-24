@@ -166,6 +166,30 @@ class SignalProcessor:
         signal -= np.mean(signal)
         return sosfilt(self._sos, signal)
 
+    def get_fft_data(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Return the current FFT spectrum (frequencies in BPM, power).
+        Returns empty arrays if there is insufficient data.
+        """
+        if len(self._buffer) < self.min_samples:
+            return np.array([]), np.array([])
+
+        signal = np.array(self._buffer, dtype=np.float64)
+        signal = signal - np.mean(signal)
+        filtered = sosfilt(self._sos, signal)
+
+        # FFT
+        n = len(filtered)
+        freqs = np.fft.rfftfreq(n, d=1.0 / self.fps)  # Hz
+        power = np.abs(np.fft.rfft(filtered)) ** 2
+
+        # Convert frequencies to BPM
+        freqs_bpm = freqs * 60.0
+
+        # Restrict to valid BPM band
+        band_mask = (freqs_bpm >= self.bpm_low) & (freqs_bpm <= self.bpm_high)
+        return freqs_bpm[band_mask], power[band_mask]
+
     def reset(self) -> None:
         """Clear the signal buffer."""
         self._buffer.clear()

@@ -9,7 +9,7 @@ Usage
 Options
 -------
     --resolution WxH     Camera resolution (default: 640x480)
-    --fps INT            Target frame rate  (default: 30)
+    --fps INT            Target frame rate  (default: 60)
     --window FLOAT       PPG analysis window in seconds (default: 12)
     --no-flip            Disable horizontal mirror
     --camera-index INT   OpenCV camera index (fallback, default: 0)
@@ -58,7 +58,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--resolution", default="640x480",
                         help="Camera resolution, e.g. 640x480")
-    parser.add_argument("--fps", type=int, default=30,
+    parser.add_argument("--fps", type=int, default=60,
                         help="Target capture frame rate")
     parser.add_argument("--window", type=float, default=12.0,
                         help="PPG analysis window in seconds")
@@ -133,6 +133,7 @@ def run(args: argparse.Namespace) -> int:
                     bpm, confidence = 0.0, 0.0
 
                 filtered = processor.get_filtered_signal()
+                fft_freqs, fft_power = processor.get_fft_data()
 
                 annotated = vis.draw(
                     frame,
@@ -141,6 +142,8 @@ def run(args: argparse.Namespace) -> int:
                     buffer_fill=processor.buffer_fill_ratio,
                     finger_detected=finger_present,
                     filtered_signal=filtered if len(filtered) > 0 else None,
+                    fft_freqs=fft_freqs if len(fft_freqs) > 0 else None,
+                    fft_power=fft_power if len(fft_power) > 0 else None,
                 )
 
                 if writer is not None:

@@ -51,11 +51,13 @@ class Visualizer:
         waveform_height: int = 80,
         roi_fraction: float = 0.35,
         show_fps: bool = True,
+        show_fft: bool = True,
     ) -> None:
         self.w, self.h = resolution
         self.waveform_height = waveform_height
         self.roi_fraction = roi_fraction
         self.show_fps = show_fps
+        self.show_fft = show_fft
 
         # Pre-compute ROI rectangle
         side = int(min(self.w, self.h) * roi_fraction)
@@ -90,6 +92,8 @@ class Visualizer:
         buffer_fill: float,
         finger_detected: bool,
         filtered_signal: Optional[np.ndarray] = None,
+        fft_freqs: Optional[np.ndarray] = None,
+        fft_power: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Annotate *frame* in-place and return it.
@@ -108,6 +112,10 @@ class Visualizer:
             Whether a finger is currently covering the lens.
         filtered_signal:
             Optional 1-D array of the latest filtered PPG waveform to plot.
+        fft_freqs:
+            Optional 1-D array of FFT frequencies in BPM.
+        fft_power:
+            Optional 1-D array of FFT power spectrum.
         """
         self._update_fps()
 
@@ -130,6 +138,11 @@ class Visualizer:
         # --- Waveform strip at the bottom ------------------------------------
         if filtered_signal is not None and len(filtered_signal) > 1:
             self._draw_waveform(frame, filtered_signal)
+
+        # --- FFT spectrum panel (right side) ----------------------------------
+        if self.show_fft and fft_freqs is not None and fft_power is not None:
+            if len(fft_freqs) > 0 and len(fft_power) > 0:
+                self._draw_fft_spectrum(frame, fft_freqs, fft_power, bpm)
 
         # --- FPS counter -------------------------------------------------------
         if self.show_fps:
@@ -224,6 +237,60 @@ class Visualizer:
         cv2.putText(
             frame, "PPG",
             (4, panel_top + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.4, _WHITE, 1, cv2.LINE_AA,
+        )
+
+    def _draw_fft_spectrum(
+        self,
+        frame: np.ndarray,
+        freqs: np.ndarray,
+        power: np.ndarray,
+        peak_bpm: float,
+    ) -> None:
+        """Draw FFT spectrum as a vertical bar graph on the right side."""
+        panel_w = 160
+        panel_x = self.w - panel_w - 10
+        panel_y = 100
+        panel_h = self.h - panel_y - self.waveform_height - 20
+
+        # Dark background
+        cv2.rectangle(frame, (panel_x, panel_y), (self.w - 10, panel_y + panel_h), _DARK, -1)
+
+        # Normalize power
+        if power.max() > 0:
+            norm_power = power / power.max()
+        else:
+            norm_power = power
+
+        # Draw bars
+        num_bars = min(len(freqs), 100)
+        if num_bars > 0:
+            step = len(freqs) // num_bars
+            bar_width = max(1, (panel_w - 20) // num_bars)
+
+            for i in range(num_bars):
+                idx = i * step
+                if idx >= len(freqs):
+                    break
+                freq_bpm = freqs[idx]
+                pwr = norm_power[idx]
+                bar_h = int(pwr * (panel_h - 20))
+
+                x = panel_x + 10 + i * bar_width
+                y_bottom = panel_y + panel_h - 10
+                y_top = y_bottom - bar_h
+
+                # Highlight peak frequency
+                color = _YELLOW if abs(freq_bpm - peak_bpm) < 2.0 else _CYAN
+                cv2.rectangle(frame, (x, y_top), (x + bar_width - 1, y_bottom), color, -1)
+
+        # Label
+        cv2.putText(
+            frame, "FFT",
+            (panel_x + 10, panel_y + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.4, _WHITE, 1, cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame, "Spectrum",
+            (panel_x + 10, panel_y + 32), cv2.FONT_HERSHEY_SIMPLEX, 0.35, _WHITE, 1, cv2.LINE_AA,
         )
 
     def _update_fps(self) -> None:
