@@ -26,6 +26,7 @@ _YELLOW = (0, 210, 210)
 _WHITE  = (255, 255, 255)
 _BLACK  = (0, 0, 0)
 _CYAN   = (220, 200,  0)
+_PURPLE = (150, 100, 180)
 _DARK   = (30, 30, 30)
 
 
@@ -280,7 +281,7 @@ class Visualizer:
                 y_top = y_bottom - bar_h
 
                 # Highlight peak frequency
-                color = _YELLOW if abs(freq_bpm - peak_bpm) < 2.0 else _CYAN
+                color = _YELLOW if abs(freq_bpm - peak_bpm) < 2.0 else _PURPLE
                 cv2.rectangle(frame, (x, y_top), (x + bar_width - 1, y_bottom), color, -1)
 
         # Label
