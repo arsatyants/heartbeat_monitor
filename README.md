@@ -13,7 +13,7 @@ a bandpass filter, and computes your heart rate via FFT.
 
 | Component | Requirement |
 |-----------|-------------|
-| SBC | Raspberry Pi 4 / 5 |
+| SBC | Raspberry Pi 4 / 5, Zero 2W|
 | Camera | Raspberry Pi AI Camera (IMX500) or any picamera2-compatible module |
 | OS | Raspberry Pi OS Bookworm (64-bit) |
 
