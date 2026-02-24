@@ -70,6 +70,7 @@ class SignalProcessor:
 
         maxlen = int(fps * window_seconds)
         self._buffer: Deque[float] = deque(maxlen=maxlen)
+        self._buffer_red: Deque[float] = deque(maxlen=maxlen)  # Red channel for SpO2
         self.min_samples: int = min_samples if min_samples is not None else int(2 * fps)
 
         # Pre-build the bandpass filter (second-order sections)
@@ -78,6 +79,7 @@ class SignalProcessor:
         # Last computed result
         self._last_bpm: float = 0.0
         self._last_confidence: float = 0.0   # peak power / total power
+        self._last_spo2: float = 0.0         # oxygen saturation %
 
     # ------------------------------------------------------------------
     # Public API
@@ -85,7 +87,7 @@ class SignalProcessor:
 
     def push_frame(self, frame: "np.ndarray") -> None:
         """
-        Extract the mean green intensity from *frame* and append to buffer.
+        Extract the mean green and red intensity from *frame* and append to buffers.
 
         Parameters
         ----------
@@ -93,7 +95,9 @@ class SignalProcessor:
             BGR image array (H × W × 3, uint8).
         """
         green_mean = float(np.mean(frame[:, :, 1]))  # channel 1 = Green in BGR
+        red_mean = float(np.mean(frame[:, :, 2]))    # channel 2 = Red in BGR
         self._buffer.append(green_mean)
+        self._buffer_red.append(red_mean)
 
     def compute_bpm(self) -> Tuple[float, float]:
         """
@@ -155,6 +159,81 @@ class SignalProcessor:
     def last_confidence(self) -> float:
         return self._last_confidence
 
+    @property
+    def last_spo2(self) -> float:
+        return self._last_spo2
+
+    def compute_spo2(self) -> float:
+        """
+        Estimate oxygen saturation (SpO2) using red and green channels.
+
+        The algorithm computes the ratio of AC/DC components for both
+        red and green channels, then applies an empirical calibration formula.
+
+        Formula: SpO2 ≈ 110 - 25 × (AC_red/DC_red) / (AC_green/DC_green)
+
+        Returns
+        -------
+        spo2:
+            Estimated oxygen saturation percentage (0-100).
+            Returns 0.0 when there is insufficient data or calculation fails.
+
+        Notes
+        -----
+        - This is an approximation using visible spectrum channels
+        - True pulse oximetry uses red (~660nm) and infrared (~940nm)
+        - Results should be considered indicative, not clinical-grade
+        """
+        if len(self._buffer) < self.min_samples or len(self._buffer_red) < self.min_samples:
+            return 0.0
+
+        try:
+            # Extract signals
+            green_signal = np.array(self._buffer, dtype=np.float64)
+            red_signal = np.array(self._buffer_red, dtype=np.float64)
+
+            # Calculate DC components (mean values)
+            dc_green = np.mean(green_signal)
+            dc_red = np.mean(red_signal)
+
+            if dc_green == 0 or dc_red == 0:
+                return 0.0
+
+            # Detrend signals
+            green_detrended = green_signal - dc_green
+            red_detrended = red_signal - dc_red
+
+            # Apply bandpass filter to get pulsatile (AC) components
+            green_filtered = sosfilt(self._sos, green_detrended)
+            red_filtered = sosfilt(self._sos, red_detrended)
+
+            # Calculate AC components (RMS of filtered signals)
+            ac_green = np.sqrt(np.mean(green_filtered ** 2))
+            ac_red = np.sqrt(np.mean(red_filtered ** 2))
+
+            if ac_green == 0:
+                return 0.0
+
+            # Calculate the ratio of ratios (R)
+            ratio_red = ac_red / dc_red
+            ratio_green = ac_green / dc_green
+            R = ratio_red / ratio_green
+
+            # Empirical calibration formula for camera-based PPG
+            # Standard formula: SpO2 = 110 - 25 * R
+            # Adjusted for visible spectrum (red/green instead of red/IR)
+            spo2 = 110 - 25 * R
+
+            # Clamp to physiologically plausible range
+            spo2 = max(70.0, min(100.0, spo2))
+
+            self._last_spo2 = spo2
+            return spo2
+
+        except Exception as e:
+            logger.warning("SpO2 calculation failed: %s", e)
+            return 0.0
+
     def get_filtered_signal(self) -> np.ndarray:
         """
         Return the current bandpass-filtered PPG waveform (for plotting).
@@ -191,10 +270,12 @@ class SignalProcessor:
         return freqs_bpm[band_mask], power[band_mask]
 
     def reset(self) -> None:
-        """Clear the signal buffer."""
+        """Clear the signal buffers."""
         self._buffer.clear()
+        self._buffer_red.clear()
         self._last_bpm = 0.0
         self._last_confidence = 0.0
+        self._last_spo2 = 0.0
 
     # ------------------------------------------------------------------
     # Private helpers

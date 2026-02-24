@@ -98,6 +98,7 @@ class Visualizer:
         filtered_signal: Optional[np.ndarray] = None,
         fft_freqs: Optional[np.ndarray] = None,
         fft_power: Optional[np.ndarray] = None,
+        spo2: float = 0.0,
     ) -> np.ndarray:
         """
         Annotate *frame* in-place and return it.
@@ -120,6 +121,8 @@ class Visualizer:
             Optional 1-D array of FFT frequencies in BPM.
         fft_power:
             Optional 1-D array of FFT power spectrum.
+        spo2:
+            Oxygen saturation percentage (70-100).
         """
         self._update_fps()
 
@@ -135,6 +138,10 @@ class Visualizer:
 
         # --- BPM readout -------------------------------------------------------
         self._draw_bpm(frame, bpm, confidence, finger_detected)
+
+        # --- SpO2 readout ------------------------------------------------------
+        if spo2 > 0:
+            self._draw_spo2(frame, spo2, finger_detected)
 
         # --- Buffer fill bar ---------------------------------------------------
         self._draw_fill_bar(frame, buffer_fill)
@@ -210,6 +217,31 @@ class Visualizer:
             cv2.putText(
                 frame, status,
                 (16, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.7, _YELLOW, 2, cv2.LINE_AA,
+            )
+
+    def _draw_spo2(
+        self,
+        frame: np.ndarray,
+        spo2: float,
+        finger_detected: bool,
+    ) -> None:
+        """Draw SpO2 percentage below the BPM readout."""
+        if spo2 > 0 and finger_detected:
+            # Color coding: green (healthy), yellow (moderate), red (low)
+            if spo2 >= 95:
+                col = _GREEN
+            elif spo2 >= 90:
+                col = _YELLOW
+            else:
+                col = _RED
+
+            cv2.putText(
+                frame, f"SpO2: {spo2:.0f}%",
+                (16, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, _BLACK, 3, cv2.LINE_AA,
+            )
+            cv2.putText(
+                frame, f"SpO2: {spo2:.0f}%",
+                (16, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2, cv2.LINE_AA,
             )
 
     def _draw_fill_bar(self, frame: np.ndarray, fill: float) -> None:

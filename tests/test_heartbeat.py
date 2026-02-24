@@ -69,6 +69,73 @@ class TestSignalProcessor:
         sig = sp.get_filtered_signal()
         assert len(sig) == 10
 
+    def test_spo2_no_data_returns_zero(self):
+        """SpO2 should return 0.0 when there is insufficient data."""
+        sp = SignalProcessor(fps=30.0, window_seconds=10.0)
+        spo2 = sp.compute_spo2()
+        assert spo2 == 0.0
+
+    def test_spo2_synthetic_signal(self):
+        """Test SpO2 calculation with synthetic pulsatile signals."""
+        fps = 30.0
+        target_hz = 1.2  # 72 BPM
+        sp = SignalProcessor(fps=fps, window_seconds=15.0, min_samples=int(2 * fps))
+
+        # Synthesise red and green channels with pulsatile components
+        # Simulating healthy oxygenated blood (SpO2 ~96-98%)
+        t = np.arange(int(fps * 15)) / fps
+        
+        # Green channel: higher mean, moderate pulsatile component
+        green_signal = 120 + 8 * np.sin(2 * np.pi * target_hz * t)
+        
+        # Red channel: lower mean, smaller pulsatile component (oxygenated blood absorbs more IR/less red modulation)
+        red_signal = 100 + 3 * np.sin(2 * np.pi * target_hz * t)
+
+        # Push as fake frames
+        for g_val, r_val in zip(green_signal, red_signal):
+            frame = np.zeros((4, 4, 3), dtype=np.uint8)
+            frame[:, :, 1] = int(np.clip(g_val, 0, 255))  # Green
+            frame[:, :, 2] = int(np.clip(r_val, 0, 255))  # Red
+            sp.push_frame(frame)
+
+        spo2 = sp.compute_spo2()
+        # Should be in valid physiological range
+        assert 70.0 <= spo2 <= 100.0, f"SpO2 {spo2:.1f}% out of valid range"
+        assert spo2 > 0.0, "SpO2 should be computed"
+
+    def test_spo2_clamped_to_range(self):
+        """SpO2 should be clamped to 70-100% range."""
+        fps = 30.0
+        sp = SignalProcessor(fps=fps, window_seconds=10.0, min_samples=int(2 * fps))
+
+        # Create pathological signal that would give extreme ratios
+        t = np.arange(int(fps * 10)) / fps
+        target_hz = 1.0
+        
+        # Extreme case: very high red pulsation, low green
+        green_signal = 150 + 2 * np.sin(2 * np.pi * target_hz * t)
+        red_signal = 80 + 20 * np.sin(2 * np.pi * target_hz * t)
+
+        for g_val, r_val in zip(green_signal, red_signal):
+            frame = np.zeros((4, 4, 3), dtype=np.uint8)
+            frame[:, :, 1] = int(np.clip(g_val, 0, 255))
+            frame[:, :, 2] = int(np.clip(r_val, 0, 255))
+            sp.push_frame(frame)
+
+        spo2 = sp.compute_spo2()
+        # Should be clamped
+        assert 70.0 <= spo2 <= 100.0, f"SpO2 {spo2:.1f}% not properly clamped"
+
+    def test_spo2_reset_clears_value(self):
+        """Reset should clear the last SpO2 value."""
+        sp = SignalProcessor(fps=10.0, window_seconds=5.0)
+        frame = np.full((10, 10, 3), 100, dtype=np.uint8)
+        for _ in range(60):
+            sp.push_frame(frame)
+        sp.compute_spo2()  # Compute to set last_spo2
+        sp.reset()
+        assert sp.last_spo2 == 0.0
+
 
 # ---------------------------------------------------------------------------
 # FingerDetector tests

@@ -113,6 +113,7 @@ def run(args: argparse.Namespace) -> int:
 
     bpm        = 0.0
     confidence = 0.0
+    spo2       = 0.0
     frame_idx  = 0
     bpm_log_interval = args.fps  # log to stdout every ~1 second
 
@@ -127,10 +128,11 @@ def run(args: argparse.Namespace) -> int:
                     processor.push_frame(roi_patch)
                     if frame_idx % 3 == 0:          # recompute every 3rd frame
                         bpm, confidence = processor.compute_bpm()
+                        spo2 = processor.compute_spo2()
                 else:
                     # Reset buffer when finger is removed
                     processor.reset()
-                    bpm, confidence = 0.0, 0.0
+                    bpm, confidence, spo2 = 0.0, 0.0, 0.0
 
                 filtered = processor.get_filtered_signal()
                 fft_freqs, fft_power = processor.get_fft_data()
@@ -143,6 +145,7 @@ def run(args: argparse.Namespace) -> int:
                     finger_detected=finger_present,
                     filtered_signal=filtered if len(filtered) > 0 else None,
                     fft_freqs=fft_freqs if len(fft_freqs) > 0 else None,
+                    spo2=spo2,
                     fft_power=fft_power if len(fft_power) > 0 else None,
                 )
 
@@ -153,7 +156,7 @@ def run(args: argparse.Namespace) -> int:
                 if args.headless and frame_idx % bpm_log_interval == 0:
                     ts = time.strftime("%H:%M:%S")
                     if bpm > 0:
-                        print(f"[{ts}] BPM={bpm:.1f}  conf={confidence:.2f}  finger={finger_present}")
+                        print(f"[{ts}] BPM={bpm:.1f}  SpO2={spo2:.0f}%  conf={confidence:.2f}  finger={finger_present}")
                     else:
                         print(f"[{ts}] Waiting for signal…  finger={finger_present}")
 
