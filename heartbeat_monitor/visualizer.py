@@ -197,11 +197,11 @@ class Visualizer:
                 col = _RED
 
             cv2.putText(
-                frame, f"{bpm:.0f} BPM",
+                frame, f"{bpm:.1f} BPM",
                 (16, 52), cv2.FONT_HERSHEY_SIMPLEX, 1.6, _BLACK, 5, cv2.LINE_AA,
             )
             cv2.putText(
-                frame, f"{bpm:.0f} BPM",
+                frame, f"{bpm:.1f} BPM",
                 (16, 52), cv2.FONT_HERSHEY_SIMPLEX, 1.6, col, 3, cv2.LINE_AA,
             )
             # Confidence mini-bar

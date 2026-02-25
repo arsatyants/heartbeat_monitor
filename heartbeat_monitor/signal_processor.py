@@ -136,6 +136,22 @@ class SignalProcessor:
 
         peak_idx = int(np.argmax(band_power))
         peak_freq = band_freqs[peak_idx]
+        
+        # Parabolic interpolation for sub-bin frequency resolution
+        # This refines the peak frequency using neighboring bins
+        if 0 < peak_idx < len(band_power) - 1:
+            # Use three points around the peak for parabolic fit
+            alpha = band_power[peak_idx - 1]
+            beta = band_power[peak_idx]
+            gamma = band_power[peak_idx + 1]
+            
+            # Parabolic interpolation formula
+            p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
+            
+            # Refined frequency with sub-bin precision
+            freq_step = band_freqs[1] - band_freqs[0] if len(band_freqs) > 1 else 0
+            peak_freq = band_freqs[peak_idx] + p * freq_step
+        
         bpm = peak_freq * 60.0
 
         # Confidence: peak / total band power
