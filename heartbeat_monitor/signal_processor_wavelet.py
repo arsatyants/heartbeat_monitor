@@ -82,10 +82,16 @@ class SignalProcessorWavelet:
         self._buffer_red: Deque[float] = deque(maxlen=maxlen)  # Red channel for SpO2
         self.min_samples: int = min_samples if min_samples is not None else int(2 * fps)
 
-        # Define frequency bands (in Hz)
-        low_hz = self.bpm_low / 60.0
-        high_hz = self.bpm_high / 60.0
-        self.band_edges = np.linspace(low_hz, high_hz, n_bands + 1)
+        # Define frequency bands with aligned boundaries (in Hz)
+        # Aligned to physiologically meaningful BPM ranges
+        if n_bands == 6:
+            # Custom aligned bands for better readability
+            self.band_edges = np.array([45, 60, 90, 120, 150, 180, 240]) / 60.0  # Convert to Hz
+        else:
+            # Fall back to linear spacing for other band counts
+            low_hz = self.bpm_low / 60.0
+            high_hz = self.bpm_high / 60.0
+            self.band_edges = np.linspace(low_hz, high_hz, n_bands + 1)
 
         # Pre-compute scales for CWT
         self._scales = self._compute_scales()
