@@ -216,8 +216,10 @@ def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band:
     bar_width = 20
     bar_spacing = 30
     start_x = 15  # Left side of screen
-    start_y = 100  # Match FFT panel position
     max_height = 80
+    waveform_height = 80  # Match visualizer waveform height
+    # Align bottom with FFT panel: end above waveform
+    start_y = h - waveform_height - 20 - max_height  # Same bottom level as FFT
     
     # Normalize powers
     if band_powers.max() > 0:
