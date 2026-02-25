@@ -169,7 +169,7 @@ def run(args: argparse.Namespace) -> int:
                 # Add wavelet info to frame
                 if processor.band_powers.sum() > 0:
                     _draw_band_powers(annotated, processor.band_powers, 
-                                     processor.dominant_band)
+                                     processor.dominant_band, processor.band_edges)
 
                 if writer is not None:
                     writer.write(annotated)
@@ -210,16 +210,16 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band: int) -> None:
-    """Draw frequency band power bars."""
+def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band: int, band_edges: np.ndarray) -> None:
+    """Draw frequency band power bars with frequency ranges."""
     h, w = frame.shape[:2]
     bar_width = 20
     bar_spacing = 30
     start_x = 15  # Left side of screen
     max_height = 80
     waveform_height = 80  # Match visualizer waveform height
-    # Align bottom with FFT panel: end above waveform
-    start_y = h - waveform_height - 20 - max_height  # Same bottom level as FFT
+    # Align bottom with FFT panel: end above waveform, raised by 30px to avoid cyan bar
+    start_y = h - waveform_height - 20 - max_height - 30  # Raised 30px higher
     
     # Normalize powers
     if band_powers.max() > 0:
@@ -237,12 +237,20 @@ def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band:
         color = (0, 255, 255) if i == dominant_band else (180, 180, 180)
         cv2.rectangle(frame, (x, y_top), (x + bar_width, y_bottom), color, -1)
         
-        # Band label
+        # Band number label
         cv2.putText(frame, f"{i}", (x + 5, y_bottom + 15),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
+        
+        # Frequency range label (BPM)
+        if i < len(band_edges) - 1:
+            low_bpm = int(band_edges[i] * 60)
+            high_bpm = int(band_edges[i + 1] * 60)
+            freq_label = f"{low_bpm}-{high_bpm}"
+            cv2.putText(frame, freq_label, (x - 5, y_bottom + 28),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.25, (200, 200, 200), 1, cv2.LINE_AA)
     
     # Title
-    cv2.putText(frame, "Bands", (start_x, start_y - 8),
+    cv2.putText(frame, "Bands (BPM)", (start_x, start_y - 8),
                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
 

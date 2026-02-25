@@ -186,6 +186,15 @@ class SignalProcessorWavelet:
             # Confidence: dominant band power / total power
             total_power = float(band_powers.sum())
             confidence = float(band_powers[dominant_band] / total_power) if total_power > 0 else 0.0
+            
+            # Penalty for edge cases to avoid false confidence
+            # 1. Reduce confidence if stuck at lowest frequency (likely noise/DC)
+            if bpm < self.bpm_low + 5:  # Within 5 BPM of lower bound
+                confidence *= 0.5
+            
+            # 2. Reduce confidence if dominant band is lowest and has >80% of power (likely no real signal)
+            if dominant_band == 0 and confidence > 0.8:
+                confidence *= 0.6
 
             self._last_bpm = bpm
             self._last_confidence = confidence
