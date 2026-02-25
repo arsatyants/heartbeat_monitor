@@ -215,8 +215,8 @@ def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band:
     h, w = frame.shape[:2]
     bar_width = 20
     bar_spacing = 30
-    start_x = w - 200
-    start_y = h - 140
+    start_x = 15  # Left side of screen
+    start_y = 100  # Match FFT panel position
     max_height = 80
     
     # Normalize powers
