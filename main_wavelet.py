@@ -213,11 +213,11 @@ def run(args: argparse.Namespace) -> int:
 def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band: int) -> None:
     """Draw frequency band power bars."""
     h, w = frame.shape[:2]
-    bar_width = 40
-    bar_spacing = 50
-    start_x = w - 250
-    start_y = 300
-    max_height = 100
+    bar_width = 20
+    bar_spacing = 30
+    start_x = w - 200
+    start_y = h - 140
+    max_height = 80
     
     # Normalize powers
     if band_powers.max() > 0:
@@ -236,12 +236,12 @@ def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band:
         cv2.rectangle(frame, (x, y_top), (x + bar_width, y_bottom), color, -1)
         
         # Band label
-        cv2.putText(frame, f"{i}", (x + 12, y_bottom + 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(frame, f"{i}", (x + 5, y_bottom + 15),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
     
     # Title
-    cv2.putText(frame, "Band Powers", (start_x, start_y - 10),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, "Bands", (start_x, start_y - 8),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
 
 # ---------------------------------------------------------------------------
