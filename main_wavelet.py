@@ -241,13 +241,38 @@ def _draw_band_powers(frame: np.ndarray, band_powers: np.ndarray, dominant_band:
         cv2.putText(frame, f"{i}", (x + 5, y_bottom + 15),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
         
-        # Frequency range label (BPM)
+        # Frequency range label (BPM) - vertical text along the bar
         if i < len(band_edges) - 1:
             low_bpm = int(band_edges[i] * 60)
             high_bpm = int(band_edges[i + 1] * 60)
             freq_label = f"{low_bpm}-{high_bpm}"
-            cv2.putText(frame, freq_label, (x - 5, y_bottom + 28),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.25, (200, 200, 200), 1, cv2.LINE_AA)
+            
+            # Create temporary image for rotated text
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.3
+            thickness = 1
+            text_size = cv2.getTextSize(freq_label, font, font_scale, thickness)[0]
+            
+            # Create image with text
+            text_img = np.zeros((text_size[1] + 4, text_size[0] + 4, 3), dtype=np.uint8)
+            cv2.putText(text_img, freq_label, (2, text_size[1] + 2), 
+                       font, font_scale, (128, 128, 128), thickness, cv2.LINE_AA)
+            
+            # Rotate 90 degrees counter-clockwise
+            rotated = cv2.rotate(text_img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            
+            # Place on frame alongside the bar
+            text_x = x + bar_width + 2
+            text_y = y_bottom - rotated.shape[0]
+            if text_y < 0:
+                text_y = 0
+            
+            # Blend the text onto frame
+            h_rot, w_rot = rotated.shape[:2]
+            if text_y + h_rot <= frame.shape[0] and text_x + w_rot <= frame.shape[1]:
+                roi = frame[text_y:text_y + h_rot, text_x:text_x + w_rot]
+                mask = (rotated > 0).any(axis=2)
+                roi[mask] = rotated[mask]
     
     # Title
     cv2.putText(frame, "Bands (BPM)", (start_x, start_y - 8),
