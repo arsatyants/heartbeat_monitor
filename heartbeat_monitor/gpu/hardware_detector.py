@@ -229,40 +229,40 @@ _BOARD_TUNING: dict[BoardType, dict] = {
     # RPi 5 – VideoCore VII – 4 shader slices, higher bandwidth
     BoardType.RPI5: dict(
         preferred_work_group = 128,
-        max_wavelet_scales   = 32,
+        max_wavelet_scales   = 16,  # Reduced for better frequency resolution
         signal_buffer_limit  = 1024,
         use_float16          = False,   # VC7 handles fp32 natively
     ),
     # RPi Zero 2W – VideoCore VI – 1 shader slice, constrained memory
     BoardType.RPI_ZERO_2W: dict(
         preferred_work_group = 64,
-        max_wavelet_scales   = 16,
+        max_wavelet_scales   = 12,  # Reduced for better frequency resolution
         signal_buffer_limit  = 512,
         use_float16          = True,    # saves memory bus bandwidth
     ),
     # Older Pi (3B, 4B, etc.)
     BoardType.RPI_OTHER: dict(
         preferred_work_group = 64,
-        max_wavelet_scales   = 24,
+        max_wavelet_scales   = 16,  # Reduced for better frequency resolution
         signal_buffer_limit  = 512,
         use_float16          = False,
     ),
     # Generic ARM / x86
     BoardType.GENERIC_ARM: dict(
         preferred_work_group = 128,
-        max_wavelet_scales   = 32,
+        max_wavelet_scales   = 16,  # Reduced for better frequency resolution
         signal_buffer_limit  = 1024,
         use_float16          = False,
     ),
     BoardType.X86: dict(
         preferred_work_group = 256,
-        max_wavelet_scales   = 48,
+        max_wavelet_scales   = 24,  # Reduced for better frequency resolution
         signal_buffer_limit  = 2048,
         use_float16          = False,
     ),
     BoardType.UNKNOWN: dict(
         preferred_work_group = 64,
-        max_wavelet_scales   = 16,
+        max_wavelet_scales   = 12,  # Reduced for better frequency resolution
         signal_buffer_limit  = 512,
         use_float16          = False,
     ),

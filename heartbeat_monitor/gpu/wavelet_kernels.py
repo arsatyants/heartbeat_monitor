@@ -134,8 +134,8 @@ __kernel void cwt_morlet(
     /* Normalisation factor: (pi * s)^{-0.25} */
     float norm = native_powr(PI_F * s, -0.25f);
 
-    /* Support: ±3s samples, capped at max_half_support */
-    int half = (int)(3.0f * s);
+    /* Support: ±4s samples, capped at max_half_support (matches CPU fallback) */
+    int half = (int)(4.0f * s);
     if (half > max_half_support) half = max_half_support;
 
     int t_start = tau - half;
@@ -245,7 +245,7 @@ void cwt_morlet_tiled(
 
     float s = (s_idx < n_scales) ? scales[s_idx] : 1.0f;
 
-    int half = (int)(3.0f * s);
+    int half = (int)(4.0f * s);
     if (half > max_half_support) half = max_half_support;
 
     /* Co-operative load of a signal tile into local memory */

@@ -135,8 +135,10 @@ class SignalProcessorWavelet:
 
         try:
             signal = np.array(self._buffer, dtype=np.float64)
-            # Detrend (remove slow drift / DC offset)
-            signal = signal - np.mean(signal)
+            # Linear detrend: removes DC offset AND slow drift over the window
+            t = np.arange(len(signal), dtype=np.float64)
+            p = np.polyfit(t, signal, 1)
+            signal -= np.polyval(p, t)
 
             # Continuous Wavelet Transform
             coefficients, frequencies = pywt.cwt(
@@ -319,7 +321,9 @@ class SignalProcessorWavelet:
 
         try:
             signal = np.array(self._buffer, dtype=np.float64)
-            signal -= np.mean(signal)
+            t = np.arange(len(signal), dtype=np.float64)
+            p = np.polyfit(t, signal, 1)
+            signal -= np.polyval(p, t)
 
             # Perform CWT and reconstruct using only heart rate frequencies
             coefficients, frequencies = pywt.cwt(
@@ -353,7 +357,9 @@ class SignalProcessorWavelet:
 
         try:
             signal = np.array(self._buffer, dtype=np.float64)
-            signal = signal - np.mean(signal)
+            t = np.arange(len(signal), dtype=np.float64)
+            p = np.polyfit(t, signal, 1)
+            signal -= np.polyval(p, t)
 
             # CWT
             coefficients, frequencies = pywt.cwt(

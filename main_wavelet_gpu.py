@@ -85,8 +85,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--headless",      action="store_true")
     p.add_argument("--cpu-fallback",  action="store_true",
                    help="Disable OpenCL; use NumPy CPU fallback")
-    p.add_argument("--show-bands",    action="store_true",
-                   help="Overlay band-energy histogram")
     p.add_argument("--info",          action="store_true",
                    help="Print hardware/OpenCL info and exit")
     return p.parse_args(argv)
@@ -96,49 +94,54 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # Band-energy overlay helper
 # ---------------------------------------------------------------------------
 
-def _draw_band_overlay(
+def _draw_band_powers(
     frame: np.ndarray,
-    energies: np.ndarray,
-    bpms: np.ndarray,
-    peak_bpm: float,
+    band_powers: np.ndarray,
+    dominant_band: int,
+    band_edges: np.ndarray,   # Hz
 ) -> None:
-    """Draw a small bar-chart of CWT band energies in the top-right corner."""
-    if len(energies) == 0:
-        return
-
+    """Draw frequency band power bars with BPM ranges – identical to CPU version."""
     h, w = frame.shape[:2]
-    bar_area_w = 160
-    bar_area_h = 80
-    x0 = w - bar_area_w - 8
-    y0 = 30
+    bar_width   = 20
+    bar_spacing = 30
+    start_x     = 15
+    max_height  = 80
+    waveform_h  = 80
+    start_y     = h - waveform_h - 20 - max_height - 30
 
-    # Dark semi-transparent background
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (x0, y0), (x0 + bar_area_w, y0 + bar_area_h),
-                  (20, 20, 20), -1)
-    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+    norm_powers = band_powers / band_powers.max() if band_powers.max() > 0 else band_powers
 
-    total = energies.sum()
-    if total == 0:
-        return
+    for i, power in enumerate(norm_powers):
+        bar_h   = int(power * max_height)
+        x       = start_x + i * bar_spacing
+        y_bot   = start_y + max_height
+        y_top   = y_bot - bar_h
 
-    n = len(energies)
-    bar_w = max(1, (bar_area_w - 4) // n)
-    max_e = energies.max()
+        color = (0, 255, 255) if i == dominant_band else (180, 180, 180)
+        cv2.rectangle(frame, (x, y_top), (x + bar_width, y_bot), color, -1)
+        cv2.putText(frame, str(i), (x + 5, y_bot + 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
 
-    for i, (e, bpm) in enumerate(zip(energies, bpms)):
-        bar_h = int((e / max_e) * (bar_area_h - 12))
-        bx = x0 + 2 + i * bar_w
-        by_top = y0 + bar_area_h - 10 - bar_h
-        by_bot = y0 + bar_area_h - 10
+        if i < len(band_edges) - 1:
+            low_bpm  = int(band_edges[i] * 60)
+            high_bpm = int(band_edges[i + 1] * 60)
+            label    = f"{low_bpm}-{high_bpm}"
+            font, fscale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.3, 1
+            tsz  = cv2.getTextSize(label, font, fscale, thick)[0]
+            timg = np.zeros((tsz[1] + 4, tsz[0] + 4, 3), dtype=np.uint8)
+            cv2.putText(timg, label, (2, tsz[1] + 2), font, fscale,
+                        (128, 128, 128), thick, cv2.LINE_AA)
+            rot  = cv2.rotate(timg, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            tx   = x + bar_width + 2
+            ty   = max(0, y_bot - rot.shape[0])
+            rh, rw = rot.shape[:2]
+            if ty + rh <= frame.shape[0] and tx + rw <= frame.shape[1]:
+                roi  = frame[ty:ty + rh, tx:tx + rw]
+                mask = (rot > 0).any(axis=2)
+                roi[mask] = rot[mask]
 
-        # Highlight peak band
-        col = (0, 200, 60) if abs(bpm - peak_bpm) < 10 else (80, 80, 180)
-        cv2.rectangle(frame, (bx, by_top), (bx + bar_w - 1, by_bot), col, -1)
-
-    cv2.putText(frame, "Band energy",
-                (x0 + 2, y0 + 9),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.36, (220, 220, 220), 1, cv2.LINE_AA)
+    cv2.putText(frame, "Bands (BPM)", (start_x, start_y - 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +206,10 @@ def run(args: argparse.Namespace) -> int:
         writer = cv2.VideoWriter(str(args.save), fourcc, args.fps, resolution)
         logger.info("Saving video → %s", args.save)
 
-    show_bands: bool = args.show_bands
     bpm        = 0.0
     confidence = 0.0
+    fft_freqs: np.ndarray = np.array([])
+    fft_power: np.ndarray = np.array([])
     frame_idx  = 0
     log_every  = args.fps   # print once per second in headless mode
 
@@ -225,14 +229,17 @@ def run(args: argparse.Namespace) -> int:
 
                 if finger:
                     processor.push_frame(frame)
-                    # Compute BPM at ~2 Hz (every 15 frames at 30 fps).
-                    # The CPU-fallback CWT is still O(N·n_scales) and calling
-                    # it 10×/s at 30 fps causes visible UI lag.
-                    if frame_idx % 15 == 0:
+                    # Compute BPM at ~3 Hz (every 10 frames at 30 fps).
+                    # With optimized scale count (16 instead of 32), the CWT
+                    # is now 2× faster and can be called more frequently for
+                    # better responsiveness.
+                    if frame_idx % 10 == 0:
                         bpm, confidence = processor.compute_bpm()
+                        fft_freqs, fft_power = processor.get_fft_data()
                 else:
                     processor.reset()
                     bpm, confidence = 0.0, 0.0
+                    fft_freqs, fft_power = np.array([]), np.array([])
 
                 filtered = processor.get_filtered_signal()
 
@@ -243,15 +250,17 @@ def run(args: argparse.Namespace) -> int:
                     buffer_fill=processor.buffer_fill_ratio,
                     finger_detected=finger,
                     filtered_signal=filtered if len(filtered) > 0 else None,
+                    fft_freqs=fft_freqs if len(fft_freqs) > 0 else None,
+                    fft_power=fft_power if len(fft_power) > 0 else None,
                 )
 
-                # Band-energy overlay (optional)
-                if show_bands:
-                    _draw_band_overlay(
+                # Band-power panel (always visible, same layout as CPU version)
+                if processor.band_powers.sum() > 0:
+                    _draw_band_powers(
                         annotated,
-                        processor.band_energies,
-                        processor.band_bpms,
-                        bpm,
+                        processor.band_powers,
+                        processor.dominant_band,
+                        processor.band_edges,
                     )
 
                 # GPU/CPU mode badge
@@ -293,8 +302,6 @@ def run(args: argparse.Namespace) -> int:
                         fname = f"snapshot_gpu_{int(time.time())}.png"
                         cv2.imwrite(fname, annotated)
                         logger.info("Saved %s", fname)
-                    elif key == ord("b"):
-                        show_bands = not show_bands
 
                 frame_idx += 1
 

@@ -111,6 +111,41 @@ def _scale_to_bpm(scale: float, fps: float) -> float:
     return (_MORLET_FC / (scale * dt)) * 60.0
 
 
+# Physiological BPM band edges (matches CPU SignalProcessorWavelet n_bands=6)
+_BAND_EDGES_BPM = np.array([45, 60, 90, 120, 150, 180, 240], dtype=np.float64)
+
+
+def _compute_bands(
+    energy: np.ndarray,
+    scales: np.ndarray,
+    fps: float,
+) -> Tuple[np.ndarray, int, float]:
+    """
+    Group per-scale energy into 6 physiological BPM bands.
+
+    Returns
+    -------
+    band_powers : ndarray shape (6,)
+    dominant_band : int
+    confidence : float  – dominant_band_power / total_power
+    """
+    bpms = np.array([_scale_to_bpm(float(s), fps) for s in scales])
+    n_bands = len(_BAND_EDGES_BPM) - 1
+    band_powers = np.zeros(n_bands, dtype=np.float64)
+
+    for i in range(n_bands):
+        mask = (bpms >= _BAND_EDGES_BPM[i]) & (bpms < _BAND_EDGES_BPM[i + 1])
+        if mask.any():
+            band_powers[i] = energy[mask].sum()
+
+    total = band_powers.sum()
+    if total == 0:
+        return band_powers, 0, 0.0
+
+    dominant = int(np.argmax(band_powers))
+    return band_powers, dominant, float(band_powers[dominant] / total)
+
+
 # ---------------------------------------------------------------------------
 # NumPy (CPU) fallback CWT
 # ---------------------------------------------------------------------------
@@ -234,9 +269,15 @@ class WaveletProcessorGPU:
         self._last_sig_len: int = 0
 
         # Last results
-        self._last_bpm:        float = 0.0
-        self._last_confidence: float = 0.0
-        self._last_energy:     np.ndarray = np.array([])
+        self._last_bpm:          float = 0.0
+        self._last_confidence:   float = 0.0
+        self._last_energy:       np.ndarray = np.array([])
+        self._last_band_powers:  np.ndarray = np.zeros(len(_BAND_EDGES_BPM) - 1)
+        self._last_dominant_band: int = 0
+
+        # Temporal smoothing for BPM stability
+        self._bpm_history: Deque[Tuple[float, float]] = deque(maxlen=5)  # (bpm, confidence)
+        self._smoothed_bpm: float = 0.0
 
         # Open OpenCL context
         if not force_cpu_fallback:
@@ -359,22 +400,100 @@ class WaveletProcessorGPU:
         if self._opencl_available and self._cl_ctx is not None:
             energy = self._compute_energy_gpu(signal)
         else:
-            # NumPy fallback
+            # NumPy fallback – linear detrend only, no std normalisation
             sig64 = signal.astype(np.float64)
-            sig64 -= sig64.mean()
-            std = sig64.std()
-            if std > 0:
-                sig64 /= std
+            t = np.arange(len(sig64), dtype=np.float64)
+            p = np.polyfit(t, sig64, 1)
+            sig64 -= np.polyval(p, t)
             energy = _numpy_cwt_energy(sig64, self._scales)
 
         if energy.sum() == 0:
             return 0.0, 0.0
 
         self._last_energy = energy
-        peak_idx   = int(np.argmax(energy))
+
+        # ── Step A: group scales into 6 physiological bands (same as CPU) ──
+        band_powers, dominant_band, confidence = _compute_bands(
+            energy, self._scales, self.fps
+        )
+        self._last_band_powers   = band_powers
+        self._last_dominant_band = dominant_band
+
+        # ── Step B: find peak scale *within* the dominant band ──
+        bpms = np.array([_scale_to_bpm(float(s), self.fps) for s in self._scales])
+        band_mask = (
+            (bpms >= _BAND_EDGES_BPM[dominant_band]) &
+            (bpms <  _BAND_EDGES_BPM[dominant_band + 1])
+        )
+        if not band_mask.any():
+            band_mask = np.ones(len(self._scales), dtype=bool)  # fallback: all scales
+
+        band_energy = energy.copy()
+        band_energy[~band_mask] = 0.0
+        peak_idx   = int(np.argmax(band_energy))
         peak_scale = float(self._scales[peak_idx])
-        bpm        = _scale_to_bpm(peak_scale, self.fps)
-        confidence = float(energy[peak_idx] / energy.sum())
+
+        # ── Step C: parabolic interpolation for sub-bin precision ──
+        local_indices = np.where(band_mask)[0]
+        if len(local_indices) >= 3:
+            local_pos = np.searchsorted(local_indices, peak_idx)
+            if 0 < local_pos < len(local_indices) - 1:
+                i_prev = local_indices[local_pos - 1]
+                i_curr = local_indices[local_pos]
+                i_next = local_indices[local_pos + 1]
+                alpha = float(energy[i_prev])
+                beta  = float(energy[i_curr])
+                gamma = float(energy[i_next])
+                denom = alpha - 2 * beta + gamma
+                if abs(denom) > 1e-9:
+                    p_off = 0.5 * (alpha - gamma) / denom
+                    if abs(p_off) < 1.0:
+                        s_lo = float(self._scales[i_curr])
+                        s_hi = float(self._scales[i_next if p_off > 0 else i_prev])
+                        peak_scale = s_lo * (s_hi / s_lo) ** abs(p_off)
+
+        bpm = _scale_to_bpm(peak_scale, self.fps)
+
+        # ── Step D: confidence penalties (same as CPU) ──
+        # 1. Near lower bound → likely DC drift
+        if bpm < self.bpm_low + 5:
+            confidence *= 0.5
+        # 2. Near upper bound → likely harmonics
+        if bpm > self.bpm_high - 10:
+            confidence *= 0.6
+        # 3. Lowest band with near-total dominance → no real signal yet
+        if dominant_band == 0 and confidence > 0.8:
+            confidence *= 0.6
+
+        # Apply temporal smoothing for stability
+        self._bpm_history.append((bpm, confidence))
+        
+        # Use weighted median filter to reject outliers
+        if len(self._bpm_history) >= 3:
+            # Extract BPMs and confidences
+            bpms = np.array([b for b, c in self._bpm_history])
+            confs = np.array([c for b, c in self._bpm_history])
+            
+            # Only smooth if current confidence is reasonable
+            if confidence > 0.15:
+                # Weighted median: give more weight to high-confidence readings
+                weights = confs / confs.sum() if confs.sum() > 0 else np.ones_like(confs) / len(confs)
+                
+                # Calculate weighted median
+                sorted_indices = np.argsort(bpms)
+                sorted_bpms = bpms[sorted_indices]
+                sorted_weights = weights[sorted_indices]
+                cumsum = np.cumsum(sorted_weights)
+                median_idx = np.searchsorted(cumsum, 0.5)
+                
+                smoothed_bpm = sorted_bpms[median_idx]
+                
+                # Exponential moving average for final smoothing (alpha=0.4)
+                if self._smoothed_bpm > 0:
+                    smoothed_bpm = 0.4 * smoothed_bpm + 0.6 * self._smoothed_bpm
+                
+                self._smoothed_bpm = smoothed_bpm
+                bpm = smoothed_bpm
 
         self._last_bpm        = bpm
         self._last_confidence = confidence
@@ -402,6 +521,21 @@ class WaveletProcessorGPU:
         return self._last_energy.copy() if len(self._last_energy) else np.array([])
 
     @property
+    def band_powers(self) -> np.ndarray:
+        """Per-band summed energy (6 physiological bands) – mirrors CPU API."""
+        return self._last_band_powers.copy()
+
+    @property
+    def dominant_band(self) -> int:
+        """Index of the dominant frequency band (0–5)."""
+        return self._last_dominant_band
+
+    @property
+    def band_edges(self) -> np.ndarray:
+        """Band edge frequencies in Hz (mirrors CPU API)."""
+        return _BAND_EDGES_BPM / 60.0
+
+    @property
     def band_bpms(self) -> np.ndarray:
         """BPM value corresponding to each scale (same length as band_energies)."""
         return np.array(
@@ -411,24 +545,54 @@ class WaveletProcessorGPU:
 
     def get_filtered_signal(self) -> np.ndarray:
         """
-        Return the current (detrended, CPU-normalised) signal buffer for plotting.
+        Return the current (linearly detrended) signal buffer for plotting.
         Returns empty array if insufficient data.
         """
         if len(self._buffer) < self.min_samples:
             return np.array([])
         sig = np.array(self._buffer, dtype=np.float64)
-        sig -= sig.mean()
-        std = sig.std()
-        if std > 0:
-            sig /= std
+        t = np.arange(len(sig), dtype=np.float64)
+        p = np.polyfit(t, sig, 1)
+        sig -= np.polyval(p, t)
         return sig
+
+    def get_fft_data(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Return the wavelet power spectrum as (freqs_bpm, power) arrays.
+
+        Reuses the energy vector computed during the last :meth:`compute_bpm`
+        call, so there is zero extra computation cost.
+
+        Returns
+        -------
+        freqs_bpm : ndarray
+            Centre frequency of each wavelet scale in BPM, restricted to
+            [bpm_low, bpm_high].
+        power : ndarray
+            Mean squared wavelet energy at each scale (same length).
+        """
+        if len(self._last_energy) == 0:
+            return np.array([]), np.array([])
+
+        bpms = np.array(
+            [_scale_to_bpm(float(s), self.fps) for s in self._scales],
+            dtype=np.float64,
+        )
+        band_mask = (bpms >= self.bpm_low) & (bpms <= self.bpm_high)
+        freqs = bpms[band_mask]
+        power = self._last_energy.astype(np.float64)[band_mask]
+        return freqs, power
 
     def reset(self) -> None:
         """Clear rolling buffer and last results."""
         self._buffer.clear()
-        self._last_bpm        = 0.0
-        self._last_confidence = 0.0
-        self._last_energy     = np.array([])
+        self._last_bpm           = 0.0
+        self._last_confidence    = 0.0
+        self._last_energy        = np.array([])
+        self._last_band_powers   = np.zeros(len(_BAND_EDGES_BPM) - 1)
+        self._last_dominant_band = 0
+        self._bpm_history.clear()
+        self._smoothed_bpm       = 0.0
         logger.debug("WaveletProcessorGPU buffer reset.")
 
     # ------------------------------------------------------------------
@@ -450,16 +614,17 @@ class WaveletProcessorGPU:
         n_scales   = len(self._scales)
         sig_len    = len(signal)
         wg_size    = self.hw.preferred_work_group
-        max_half   = min(int(3.0 * float(self._scales[-1])), sig_len // 2)
+        max_half   = min(int(4.0 * float(self._scales[-1])), sig_len // 2)
 
         # -----------------------------------------------------------------
-        # Step 1 – detrend on host (fast numpy, avoids reduction kernel)
+        # Step 1 – linear detrend on host (removes DC + slow drift)
         # -----------------------------------------------------------------
-        mean = signal.mean()
-        std  = signal.std()
-        if std < 1e-9:
-            std = 1.0
-        signal_norm = ((signal - mean) / std).astype(np.float32)
+        sig64 = signal.astype(np.float64)
+        # Fit and subtract a straight line to remove slow drift / DC
+        t = np.arange(len(sig64), dtype=np.float64)
+        p = np.polyfit(t, sig64, 1)
+        sig64 -= np.polyval(p, t)
+        signal_norm = sig64.astype(np.float32)
 
         # -----------------------------------------------------------------
         # Step 2 – (re)allocate device buffers if signal length changed
