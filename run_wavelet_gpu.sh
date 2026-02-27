@@ -16,5 +16,7 @@ fi
 
 # Use X11/XWayland for OpenCV imshow (bundled Qt5 has no Wayland plugin)
 export QT_QPA_PLATFORM=xcb
+# Point Qt5 at system fonts – pip opencv-python ships no fonts of its own
+export QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu
 
 exec python main_wavelet_gpu.py "$@"
