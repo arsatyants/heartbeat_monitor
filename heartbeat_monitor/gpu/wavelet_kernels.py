@@ -131,8 +131,11 @@ __kernel void cwt_morlet(
 
     float s = scales[s_idx];
 
-    /* Normalisation factor: (pi * s)^{-0.25} */
-    float norm = native_powr(PI_F * s, -0.25f);
+    /* Normalisation factor: (pi * s)^{-0.25} / sqrt(s)  – L² (energy) normalisation.
+       Matches pywt and the NumPy fallback.  Without the /sqrt(s) term, larger scales
+       (lower frequencies) accumulate artificially more energy, biasing confidence
+       toward low-frequency bands. */
+    float norm = native_powr(PI_F * s, -0.25f) / native_sqrt(s);
 
     /* Support: ±4s samples, capped at max_half_support (matches CPU fallback) */
     int half = (int)(4.0f * s);
@@ -258,7 +261,7 @@ void cwt_morlet_tiled(
 
     if (s_idx >= n_scales || tau >= signal_len) return;
 
-    float norm  = native_powr(PI_F * s, -0.25f);
+    float norm  = native_powr(PI_F * s, -0.25f) / native_sqrt(s);  /* L² normalisation */
     float w_re  = 0.0f;
     float w_im  = 0.0f;
     int   t_start = tau - half;
