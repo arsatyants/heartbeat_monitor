@@ -19,6 +19,7 @@ Supported targets
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import re
 import subprocess
@@ -26,6 +27,11 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
+
+# Enable the Mesa Rusticl OpenCL backend for the VideoCore VII (v3d) GPU on
+# Raspberry Pi 5.  This must be set before pyopencl (or any code that loads
+# libOpenCL) is imported, so we do it at module level.
+os.environ.setdefault("RUSTICL_ENABLE", "v3d")
 
 logger = logging.getLogger(__name__)
 

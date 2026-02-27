@@ -10,6 +10,9 @@ if [[ -d .venv ]]; then
     source .venv/bin/activate
 fi
 
+# Enable Mesa Rusticl OpenCL backend for the VideoCore VII GPU (Raspberry Pi 5)
+export RUSTICL_ENABLE=v3d
+
 # Use X11/XWayland for OpenCV imshow (bundled Qt5 has no Wayland plugin)
 export QT_QPA_PLATFORM=xcb
 

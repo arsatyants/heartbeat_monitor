@@ -138,11 +138,11 @@ __kernel void cwt_morlet(
     float norm = native_powr(PI_F * s, -0.25f) / native_sqrt(s);
 
     /* Support: ±4s samples, capped at max_half_support (matches CPU fallback) */
-    int half = (int)(4.0f * s);
-    if (half > max_half_support) half = max_half_support;
+    int half_w = (int)(4.0f * s);
+    if (half_w > max_half_support) half_w = max_half_support;
 
-    int t_start = tau - half;
-    int t_end   = tau + half;
+    int t_start = tau - half_w;
+    int t_end   = tau + half_w;
 
     float w_re = 0.0f;
     float w_im = 0.0f;
@@ -248,8 +248,8 @@ void cwt_morlet_tiled(
 
     float s = (s_idx < n_scales) ? scales[s_idx] : 1.0f;
 
-    int half = (int)(4.0f * s);
-    if (half > max_half_support) half = max_half_support;
+    int half_w = (int)(4.0f * s);
+    if (half_w > max_half_support) half_w = max_half_support;
 
     /* Co-operative load of a signal tile into local memory */
     int tile_base = tau - local_t;            /* beginning of tile */
@@ -264,8 +264,8 @@ void cwt_morlet_tiled(
     float norm  = native_powr(PI_F * s, -0.25f) / native_sqrt(s);  /* L² normalisation */
     float w_re  = 0.0f;
     float w_im  = 0.0f;
-    int   t_start = tau - half;
-    int   t_end   = tau + half;
+    int   t_start = tau - half_w;
+    int   t_end   = tau + half_w;
 
     for (int t = t_start; t <= t_end; t++) {
         /* Use local memory when inside tile, global otherwise */

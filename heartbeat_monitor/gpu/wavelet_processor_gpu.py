@@ -314,10 +314,16 @@ class WaveletProcessorGPU:
             device    = devices[dev_info.device_index]
 
             self._cl_ctx   = cl.Context([device])
-            self._cl_queue = cl.CommandQueue(
-                self._cl_ctx,
-                properties=cl.command_queue_properties.PROFILING_ENABLE,
-            )
+            # PROFILING_ENABLE is not supported by all drivers (e.g. Mesa
+            # Rusticl / v3d on Raspberry Pi 5).  Try with profiling first;
+            # if the driver rejects it, fall back to a plain queue.
+            try:
+                self._cl_queue = cl.CommandQueue(
+                    self._cl_ctx,
+                    properties=cl.command_queue_properties.PROFILING_ENABLE,
+                )
+            except cl.Error:
+                self._cl_queue = cl.CommandQueue(self._cl_ctx)
 
             # Compile all kernels
             self._cl_prog = cl.Program(self._cl_ctx, ALL_KERNELS_SOURCE).build(
