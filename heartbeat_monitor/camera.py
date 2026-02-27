@@ -186,8 +186,10 @@ class IMX500Camera:
                 "(shape=%s dtype=%s) – check lens cap / exposure.",
                 frame.shape, frame.dtype,
             )
-        # picamera2 RGB888 → OpenCV BGR
-        return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # libcamera/picamera2 "RGB888" packs bytes as B,G,R in memory
+        # (little-endian 24-bit ordering), so the array is already BGR –
+        # no colour conversion needed for OpenCV.
+        return frame
 
     # ------------------------------------------------------------------
     # Private helpers – OpenCV fallback
