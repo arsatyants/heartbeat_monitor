@@ -25,6 +25,6 @@ sleep 0.3
 
 # Run python as a child so the trap can kill it on Ctrl-C / TERM / EXIT
 trap 'kill "$CHILD" 2>/dev/null; wait "$CHILD" 2>/dev/null; exit' INT TERM EXIT
-python main_wavelet_gpu.py "$@" &
+python main_wavelet_gpu.py --fps 60 "$@" &
 CHILD=$!
 wait "$CHILD"
