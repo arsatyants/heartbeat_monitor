@@ -10,3 +10,8 @@ pytest>=7.4
 # Raspberry Pi camera (install manually on Pi OS or via apt)
 # picamera2>=0.3.12          # uncomment on Raspberry Pi
 # libcamera                  # system package: sudo apt install python3-libcamera
+
+# GPU / OpenCL acceleration (feature/gpu-wavelet-opencl branch)
+# On Raspberry Pi OS: sudo apt install python3-pyopencl ocl-icd-opencl-dev
+# On desktop:        pip install pyopencl
+pyopencl>=2024.1

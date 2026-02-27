@@ -1,5 +1,16 @@
 # Wavelet-Based Signal Processor
 
+## Recent Optimizations (Latest)
+
+**Major performance and accuracy improvements applied to GPU implementation:**
+- **Reduced scale count**: 16-24 scales (was 32-48) for 2× faster computation and better frequency resolution  
+- **Parabolic interpolation**: Sub-bin precision for <1% BPM error (was ~5-10% quantization error)
+- **Confidence penalties**: Realistic confidence scoring for edge cases
+- **Temporal smoothing**: Weighted median filter + EMA reduces jitter to <3 BPM std dev
+- **Extended wavelet support**: ±4σ (was ±3σ) for better accuracy matching CPU implementation
+
+See [GPU_WAVELET_OPTIMIZATIONS.md](GPU_WAVELET_OPTIMIZATIONS.md) for detailed analysis and benchmarks.
+
 ## Overview
 
 This is an alternative implementation of the heartbeat detection algorithm using **Continuous Wavelet Transform (CWT)** instead of Butterworth filtering and FFT. 
