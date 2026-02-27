@@ -35,7 +35,6 @@ from pathlib import Path
 # looking for a Wayland plugin that is not bundled with pip-installed opencv.
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
-os.environ.setdefault("QT_QPA_FONTDIR", "/usr/share/fonts/truetype/dejavu")
 
 import cv2
 import numpy as np
