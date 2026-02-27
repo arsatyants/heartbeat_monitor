@@ -14,7 +14,7 @@ Usage
 Options
 -------
     --resolution WxH        Camera resolution      (default: 640x480)
-    --fps INT               Target frame rate       (default: 60)
+    --fps INT               Target frame rate       (default: 30)
     --window FLOAT          Analysis window seconds (default: 12)
     --bpm-low INT           Minimum BPM search     (default: 45)
     --bpm-high INT          Maximum BPM search     (default: 240)
@@ -75,7 +75,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--resolution",    default="640x480")
-    p.add_argument("--fps",           type=int,   default=60)
+    p.add_argument("--fps",           type=int,   default=30)
     p.add_argument("--window",        type=float, default=12.0)
     p.add_argument("--bpm-low",       type=float, default=45.0)
     p.add_argument("--bpm-high",      type=float, default=240.0)
@@ -229,8 +229,7 @@ def run(args: argparse.Namespace) -> int:
 
                 if finger:
                     processor.push_frame(frame)
-                    # Compute BPM at ~6 Hz (every 10 frames at 60 fps).
-                    # GPU CWT is fast enough to sustain this rate comfortably.
+                    # Compute BPM at ~3 Hz (every 10 frames at 30 fps).
                     if frame_idx % 10 == 0:
                         bpm, confidence = processor.compute_bpm()
                         fft_freqs, fft_power = processor.get_fft_data()
