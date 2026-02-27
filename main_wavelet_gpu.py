@@ -208,6 +208,9 @@ def run(args: argparse.Namespace) -> int:
         hw.board.name,
     )
 
+    if not args.headless:
+        cv2.namedWindow("Heartbeat GPU Monitor — IMX500", cv2.WINDOW_NORMAL)
+
     try:
         with camera:
             for frame in camera.frames():

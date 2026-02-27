@@ -19,4 +19,12 @@ export QT_QPA_PLATFORM=xcb
 # Point Qt5 at system fonts – pip opencv-python ships no fonts of its own
 export QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu
 
-exec python main_wavelet_gpu.py "$@"
+# Release any stale camera lock left by a previous crashed run
+fuser -k /dev/media0 /dev/media1 2>/dev/null || true
+sleep 0.3
+
+# Run python as a child so the trap can kill it on Ctrl-C / TERM / EXIT
+trap 'kill "$CHILD" 2>/dev/null; wait "$CHILD" 2>/dev/null; exit' INT TERM EXIT
+python main_wavelet_gpu.py "$@" &
+CHILD=$!
+wait "$CHILD"
