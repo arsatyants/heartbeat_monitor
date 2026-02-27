@@ -187,7 +187,14 @@ def run(args: argparse.Namespace) -> int:
         force_cpu_fallback=args.cpu_fallback,
     )
 
-    detector = FingerDetector()
+    # IMX500 auto-exposure brightens a covered lens above the default
+    # threshold of 100.  Loosen both brightness and variance limits so the
+    # GPU version actually fires on a real finger placement.
+    detector = FingerDetector(
+        brightness_threshold=160,
+        variance_threshold=1500,
+        red_dominance=1.02,
+    )
     vis      = Visualizer(resolution=resolution, show_fps=not args.headless)
 
     writer: cv2.VideoWriter | None = None
@@ -218,7 +225,10 @@ def run(args: argparse.Namespace) -> int:
 
                 if finger:
                     processor.push_frame(frame)
-                    if frame_idx % 3 == 0:
+                    # Compute BPM at ~2 Hz (every 15 frames at 30 fps).
+                    # The CPU-fallback CWT is still O(N·n_scales) and calling
+                    # it 10×/s at 30 fps causes visible UI lag.
+                    if frame_idx % 15 == 0:
                         bpm, confidence = processor.compute_bpm()
                 else:
                     processor.reset()
