@@ -42,6 +42,11 @@ import sys
 import time
 from pathlib import Path
 
+# Must be set before cv2 is imported so Qt5 uses X11/XWayland instead of
+# looking for a Wayland plugin that is not bundled with pip-installed opencv.
+import os
+os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+
 import cv2
 import numpy as np
 

@@ -10,4 +10,10 @@ if [[ -d .venv ]]; then
     source .venv/bin/activate
 fi
 
+# Use X11/XWayland for OpenCV imshow (bundled Qt5 has no Wayland plugin)
+export QT_QPA_PLATFORM=xcb
+
+# Kill any leftover camera process on exit so /dev/media0 is always released
+trap 'kill $(jobs -p) 2>/dev/null; exit' INT TERM EXIT
+
 python main_wavelet.py "$@"

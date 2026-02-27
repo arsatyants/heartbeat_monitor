@@ -14,4 +14,7 @@ if [[ -d .venv ]]; then
     source .venv/bin/activate
 fi
 
+# Use X11/XWayland for OpenCV imshow (bundled Qt5 has no Wayland plugin)
+export QT_QPA_PLATFORM=xcb
+
 exec python main_wavelet_gpu.py "$@"
