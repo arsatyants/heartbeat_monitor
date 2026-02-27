@@ -126,10 +126,18 @@ class IMX500Camera:
                 for frame in cam.frames():
                     process(frame)
         """
+        _null_streak = 0
         while self._cam is not None:
             frame = self.read_frame()
             if frame is None:
-                break
+                _null_streak += 1
+                if _null_streak >= 10:
+                    logger.error(
+                        "Camera returned 10 consecutive None frames – aborting."
+                    )
+                    break
+                continue
+            _null_streak = 0
             yield frame
 
     # ------------------------------------------------------------------
@@ -140,19 +148,45 @@ class IMX500Camera:
         cam = Picamera2()
         w, h = self.resolution
         transform = Transform(hflip=self.flip_horizontal)
+        # RGB888 is the safest 3-channel format across all Pi camera models
+        # (IMX500, Camera Module 3, HQ Camera, etc.) and all picamera2 versions.
         config = cam.create_video_configuration(
-            main={"size": (w, h), "format": "BGR888"},
+            main={"size": (w, h), "format": "RGB888"},
             transform=transform,
+            buffer_count=4,
         )
         cam.configure(config)
-        cam.set_controls({"FrameRate": float(self.fps)})
+        frame_duration = int(1_000_000 / self.fps)   # microseconds
+        try:
+            cam.set_controls({
+                "FrameDurationLimits": (frame_duration, frame_duration),
+            })
+        except Exception as exc:                         # noqa: BLE001
+            logger.warning("Could not set FrameDurationLimits: %s", exc)
         cam.start()
+        # Discard the first few frames so auto-exposure/white-balance can settle.
+        # Without this the IMX500 often returns under-exposed (black) frames.
+        for _ in range(8):
+            cam.capture_array("main")
         self._cam = cam
 
-    def _read_picamera2(self) -> np.ndarray:
-        # picamera2 BGR888 stores bytes as R,G,B in memory despite the name;
-        # swap R and B so OpenCV receives true BGR
-        frame = self._cam.capture_array()
+    def _read_picamera2(self) -> np.ndarray | None:
+        # Always specify the stream name for compatibility with newer picamera2
+        frame = self._cam.capture_array("main")
+        if frame is None:
+            logger.warning("capture_array returned None.")
+            return None
+        # Drop alpha channel if camera returned 4-channel XRGB/RGBA
+        if frame.ndim == 3 and frame.shape[2] == 4:
+            frame = frame[:, :, :3]
+        # Validate: warn if the frame is completely black (all zeros)
+        if frame.max() == 0:
+            logger.warning(
+                "Camera returned an all-black frame "
+                "(shape=%s dtype=%s) – check lens cap / exposure.",
+                frame.shape, frame.dtype,
+            )
+        # picamera2 RGB888 → OpenCV BGR
         return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
     # ------------------------------------------------------------------
