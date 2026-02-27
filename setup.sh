@@ -15,6 +15,14 @@ fi
 echo "=== Heartbeat Monitor Setup ==="
 echo "Raspberry Pi detected: $IS_PI"
 
+# ── OpenCL system packages ────────────────────────────────────────────────────
+# mesa-opencl-icd  – exposes the VideoCore VII (v3d) GPU as an OpenCL device
+# clinfo           – diagnostic tool to list available OpenCL platforms/devices
+# ocl-icd-libopencl1 is typically already present; listed for completeness
+echo "Installing OpenCL system packages (requires sudo)..."
+sudo apt-get install -y mesa-opencl-icd clinfo ocl-icd-libopencl1
+# ─────────────────────────────────────────────────────────────────────────────
+
 if $IS_PI; then
     echo "Creating venv with --system-site-packages (for picamera2 / libcamera)..."
     python3 -m venv .venv --system-site-packages
