@@ -18,16 +18,16 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# Colour palette (BGR)
+# Colour palette (BGR) — White background, black text
 # ---------------------------------------------------------------------------
-_GREEN  = (0, 220,  80)
-_RED    = (0,  50, 220)
-_YELLOW = (0, 210, 210)
-_WHITE  = (255, 255, 255)
-_BLACK  = (0, 0, 0)
-_CYAN   = (220, 200,  0)
-_PURPLE = (150, 100, 180)
-_DARK   = (30, 30, 30)
+_GREEN  = ( 40, 140,  40)   # dark green
+_RED    = (  0,   0, 200)   # dark red
+_YELLOW = (  0, 140, 200)   # dark orange/amber
+_WHITE  = (255, 255, 255)   # white (backgrounds)
+_BLACK  = (  0,   0,   0)   # black (text)
+_CYAN   = (140,  80,   0)   # dark teal
+_PURPLE = (140,  40, 140)   # dark purple
+_DARK   = (230, 230, 230)   # light grey (panels)
 
 
 class Visualizer:
