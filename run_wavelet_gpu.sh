@@ -10,8 +10,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-if [[ -d .venv ]]; then
-    source .venv/bin/activate
+# Pick Python: prefer venv if present, otherwise system python3
+if [[ -x .venv/bin/python ]]; then
+    PYTHON="$SCRIPT_DIR/.venv/bin/python"
+else
+    PYTHON="$(command -v python3 || command -v python)"
 fi
 
 # Enable Mesa Rusticl OpenCL backend for the VideoCore VII GPU (Raspberry Pi 5)
@@ -28,6 +31,6 @@ sleep 0.3
 
 # Run python as a child so the trap can kill it on Ctrl-C / TERM / EXIT
 trap 'kill "$CHILD" 2>/dev/null; wait "$CHILD" 2>/dev/null; exit' INT TERM EXIT
-python main_wavelet_gpu.py "$@" &
+"$PYTHON" main_wavelet_gpu.py "$@" &
 CHILD=$!
 wait "$CHILD"
