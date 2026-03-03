@@ -32,24 +32,22 @@ constructor argument (or ``--strategy`` on the command line).
     experimenting with different wavelet families.
 
 ``"numpy"``
-    Uses a vectorised NumPy Morlet convolution (ported from the GPU
-    processor's CPU fallback :func:`_numpy_cwt_energy`).
+Uses a vectorised NumPy Morlet convolution.
 
     * Fixed complex Morlet wavelet (ω₀ = 6, f_c ≈ 0.955 Hz) — ``--wavelet``
       is ignored.
     * 64 geometrically-spaced scales via ``np.geomspace``.
     * **Temporal smoothing** – weighted median over the last 5 BPM readings
       (weights = per-reading confidence) followed by an EMA (α = 0.4).
-      This is the same two-layer filter used by the GPU processor and
-      produces a noticeably more stable digit on screen.
+      This two-layer filter produces a noticeably more stable digit on screen.
     * Does *not* compute SpO₂ (returns ``0.0``).
     * ``get_filtered_signal()`` returns the detrended raw buffer (zero extra
       cost).  ``get_fft_data()`` reuses the energy vector from the last
       ``compute_bpm()`` call (also zero extra cost).
     * Typical compute time: ~13 ms on RPi 5 (360-sample buffer).
 
-    **Best for:** stable live BPM display, headless logging, hardware where
-    pywt is slow or unavailable, or matching the GPU-path behaviour exactly.
+    **Best for:** stable live BPM display, headless logging, or hardware where
+    pywt is slow or unavailable.
 
 Side-by-side benchmark (72 BPM synthetic signal, 360 samples, RPi 5)
 ----------------------------------------------------------------------
@@ -123,10 +121,9 @@ class SignalProcessorWavelet:
             and reconstructs the filtered waveform via inverse CWT.
 
         ``"numpy"``
-            Uses a vectorised NumPy Morlet convolution (ports the GPU
-            processor's CPU fallback).  Faster on modest hardware, adds
-            temporal smoothing (weighted-median + EMA over the last 5
-            readings), and does not compute SpO₂.
+            Uses a vectorised NumPy Morlet convolution.  Faster on modest
+            hardware, adds temporal smoothing (weighted-median + EMA over
+            the last 5 readings), and does not compute SpO₂.
     """
 
     def __init__(
@@ -505,7 +502,6 @@ class SignalProcessorWavelet:
         Vectorised Morlet CWT band energy – no pywt dependency.
 
         Returns array of shape (n_scales,) with summed |CWT|² per scale.
-        Ported from :func:`heartbeat_monitor.gpu.wavelet_processor_gpu._numpy_cwt_energy`.
         """
         sig    = signal.astype(np.float64)
         n      = len(sig)
@@ -545,7 +541,6 @@ class SignalProcessorWavelet:
     def _compute_bpm_numpy(self) -> Tuple[float, float]:
         """
         BPM estimation using vectorised numpy Morlet CWT with temporal smoothing.
-        Ported from :class:`heartbeat_monitor.gpu.wavelet_processor_gpu.WaveletProcessorGPU`.
         """
         try:
             signal = np.array(self._buffer, dtype=np.float64)
