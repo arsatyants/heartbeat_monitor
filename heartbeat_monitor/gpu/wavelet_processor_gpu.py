@@ -261,6 +261,11 @@ class WaveletProcessorGPU:
         self._cl_prog:  "pyopencl.Program   | None" = None
         self._use_tiled: bool = (self.hw.board == BoardType.RPI_ZERO_2W)
 
+        # Cached kernel objects – created once in open(), reused every frame
+        self._k_cwt_morlet:       "pyopencl.Kernel | None" = None
+        self._k_cwt_morlet_tiled: "pyopencl.Kernel | None" = None
+        self._k_band_energy:      "pyopencl.Kernel | None" = None
+
         # Persistent device buffers (reallocated if signal length changes)
         self._d_signal:     "pyopencl.Buffer | None" = None
         self._d_scales:     "pyopencl.Buffer | None" = None
@@ -330,6 +335,11 @@ class WaveletProcessorGPU:
                 options="-cl-fast-relaxed-math -cl-mad-enable"
             )
 
+            # Cache kernel instances – avoids RepeatedKernelRetrieval overhead
+            self._k_cwt_morlet       = cl.Kernel(self._cl_prog, "cwt_morlet")
+            self._k_cwt_morlet_tiled = cl.Kernel(self._cl_prog, "cwt_morlet_tiled")
+            self._k_band_energy      = cl.Kernel(self._cl_prog, "band_energy")
+
             # Upload scales to device (constant across frames)
             import pyopencl as cl
             mf = cl.mem_flags
@@ -361,9 +371,12 @@ class WaveletProcessorGPU:
                 except Exception:                          # noqa: BLE001
                     pass
             setattr(self, attr, None)
-        self._cl_queue = None
-        self._cl_ctx   = None
-        self._cl_prog  = None
+        self._cl_queue           = None
+        self._cl_ctx             = None
+        self._cl_prog            = None
+        self._k_cwt_morlet       = None
+        self._k_cwt_morlet_tiled = None
+        self._k_band_energy      = None
         logger.info("WaveletProcessorGPU closed.")
 
     def __enter__(self) -> "WaveletProcessorGPU":
@@ -651,7 +664,7 @@ class WaveletProcessorGPU:
             # Tiled kernel for RPi Zero 2W (small local mem)
             tile_wg    = 64
             global_tau = int(math.ceil(sig_len / tile_wg)) * tile_wg
-            evt = self._cl_prog.cwt_morlet_tiled(
+            evt = self._k_cwt_morlet_tiled(
                 self._cl_queue,
                 (n_scales, global_tau),
                 (1, tile_wg),
@@ -666,7 +679,7 @@ class WaveletProcessorGPU:
         else:
             # Standard kernel – work-group shape along tau axis
             global_tau = int(math.ceil(sig_len / wg_size)) * wg_size
-            evt = self._cl_prog.cwt_morlet(
+            evt = self._k_cwt_morlet(
                 self._cl_queue,
                 (n_scales, global_tau),
                 (1, wg_size),
@@ -683,7 +696,7 @@ class WaveletProcessorGPU:
         # Step 5 – band energy summation
         # -----------------------------------------------------------------
         global_scales = int(math.ceil(n_scales / max(wg_size, 1))) * max(wg_size, 1)
-        evt2 = self._cl_prog.band_energy(
+        evt2 = self._k_band_energy(
             self._cl_queue,
             (global_scales,),
             (min(wg_size, n_scales),),
