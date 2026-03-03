@@ -310,8 +310,8 @@ class Visualizer:
         # Draw bars
         num_bars = min(len(freqs), 100)
         if num_bars > 0:
-            step = len(freqs) // num_bars
-            bar_width = max(1, (panel_w - 20) // num_bars)
+            step = max(1, len(freqs) // num_bars)
+            bar_width_f = (panel_w - 20) / num_bars
 
             for i in range(num_bars):
                 idx = i * step
@@ -321,13 +321,14 @@ class Visualizer:
                 pwr = norm_power[idx]
                 bar_h = int(pwr * (panel_h - 20))
 
-                x = panel_x + 10 + i * bar_width
+                x0 = panel_x + 10 + int(i * bar_width_f)
+                x1 = panel_x + 10 + int((i + 1) * bar_width_f) - 1
                 y_bottom = panel_y + panel_h - 10
                 y_top = y_bottom - bar_h
 
                 # Highlight peak frequency
                 color = _YELLOW if abs(freq_bpm - peak_bpm) < 2.0 else _PURPLE
-                cv2.rectangle(frame, (x, y_top), (x + bar_width - 1, y_bottom), color, -1)
+                cv2.rectangle(frame, (x0, y_top), (max(x0, x1), y_bottom), color, -1)
 
         # Label
         cv2.putText(
