@@ -1,16 +1,5 @@
 # Wavelet-Based Signal Processor
 
-## Recent Optimizations (Latest)
-
-**Major performance and accuracy improvements applied to GPU implementation:**
-- **Reduced scale count**: 16-24 scales (was 32-48) for 2× faster computation and better frequency resolution  
-- **Parabolic interpolation**: Sub-bin precision for <1% BPM error (was ~5-10% quantization error)
-- **Confidence penalties**: Realistic confidence scoring for edge cases
-- **Temporal smoothing**: Weighted median filter + EMA reduces jitter to <3 BPM std dev
-- **Extended wavelet support**: ±4σ (was ±3σ) for better accuracy matching CPU implementation
-
-See [GPU_WAVELET_OPTIMIZATIONS.md](GPU_WAVELET_OPTIMIZATIONS.md) for detailed analysis and benchmarks.
-
 ## Overview
 
 This is an alternative implementation of the heartbeat detection algorithm using **Continuous Wavelet Transform (CWT)** instead of Butterworth filtering and FFT. 
@@ -139,9 +128,7 @@ different wavelet families.
 
 ### `numpy`
 
-Uses a **vectorised NumPy Morlet convolution** – the same algorithm as the
-GPU processor's CPU fallback (`_numpy_cwt_energy`).  Adds temporal smoothing
-identical to the GPU path.
+Uses a **vectorised NumPy Morlet convolution** with temporal smoothing.
 
 | Property | Detail |
 |----------|--------|
@@ -185,7 +172,7 @@ frame    pywt BPM    numpy BPM
 
 The `numpy` strategy's two-layer filter (weighted median then EMA) is the
 reason the digit on screen barely moves once the signal is established –
-exactly the behaviour of the GPU version.
+exactly the behaviour with the `pywt` strategy.
 
 ---
 
@@ -198,7 +185,7 @@ exactly the behaviour of the GPU version.
 | Stable live BPM display on screen | `numpy` |
 | Headless logging / alerting | `numpy` |
 | Raspberry Pi with limited RAM | `numpy` (no 2-D coefficient matrix) |
-| GPU mode not available, matching GPU behaviour | `numpy` |
+| Stable live BPM display, low jitter | `numpy` |
 
 The implementation supports various wavelet families from PyWavelets:
 
@@ -291,6 +278,5 @@ SignalProcessorWavelet(
 
 - [ ] Wavelet packet decomposition for even finer frequency resolution
 - [ ] Adaptive band selection based on signal quality
-- [ ] GPU acceleration for real-time performance
 - [ ] Time-frequency visualization in UI
 - [ ] Automatic wavelet selection based on signal characteristics
