@@ -85,6 +85,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="Save annotated video to this file path")
     parser.add_argument("--headless", action="store_true",
                         help="No display window; log BPM to stdout only")
+    parser.add_argument("--strategy", choices=["pywt", "numpy"], default="pywt",
+                        help="CWT backend: 'pywt' (default, PyWavelets + SpO\u2082) or "
+                             "'numpy' (vectorised Morlet, temporal smoothing, faster)")
     return parser.parse_args(argv)
 
 
@@ -114,6 +117,7 @@ def run(args: argparse.Namespace) -> int:
         window_seconds=args.window,
         n_bands=args.bands,
         wavelet=args.wavelet,
+        strategy=args.strategy,
     )
     detector  = FingerDetector()
     vis       = Visualizer(resolution=resolution, show_fps=not args.headless)
@@ -125,8 +129,8 @@ def run(args: argparse.Namespace) -> int:
         writer = cv2.VideoWriter(str(args.save), fourcc, args.fps, resolution)
         logger.info("Saving video to %s", args.save)
 
-    logger.info("Starting wavelet-based heartbeat monitor (bands=%d, wavelet=%s).", 
-                args.bands, args.wavelet)
+    logger.info("Starting wavelet-based heartbeat monitor (bands=%d, wavelet=%s, strategy=%s).",
+                args.bands, args.wavelet, args.strategy)
     logger.info("Press 'q' or ESC to quit.")
 
     if not args.headless:
