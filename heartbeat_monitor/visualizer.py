@@ -301,6 +301,11 @@ class Visualizer:
         # Dark background
         cv2.rectangle(frame, (panel_x, panel_y), (self.w - 10, panel_y + panel_h), _DARK, -1)
 
+        # Ensure lowest frequency is on the left
+        sort_idx = np.argsort(freqs)
+        freqs = freqs[sort_idx]
+        power = power[sort_idx]
+
         # Normalize power
         if power.max() > 0:
             norm_power = power / power.max()
